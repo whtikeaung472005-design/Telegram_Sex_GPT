@@ -71,7 +71,8 @@ async def handle_user_message(message: types.Message):
     processing_msg = await message.answer("⏳ စဉ်းစားနေပါတယ်... ခဏလေးစောင့်ပေးပါ။")
 
     try:
-        chat_history = await get_chat_history(user_id, limit=10)
+        # --- ဒီနေရာမှာ limit=20 လို့ ပြင်ပေးထားတယ်၊ AI က ပိုမှတ်မိသွားလိမ့်မယ် ---
+        chat_history = await get_chat_history(user_id, limit=20)
         ai_response = await generate_response(user_text, history=chat_history)
         
         if not ai_response:
