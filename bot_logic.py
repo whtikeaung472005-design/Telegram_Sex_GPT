@@ -3,7 +3,6 @@ import os
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
-from aiogram.utils.chat_action import ChatActionSender
 from dotenv import load_dotenv
 
 # Import our custom modules
@@ -100,7 +99,7 @@ async def handle_user_message(message: types.Message):
         await update_usage(user_id, output_length)
         
         # 6. Delete Loading Message and Send Final Response
-        await processing_msg.delete() # ယာယီ Message ကို ဖျက်လိုက်ပါပြီ
+        await processing_msg.delete() 
         
         if len(ai_response) > 4096:
             for x in range(0, len(ai_response), 4096):
@@ -110,6 +109,5 @@ async def handle_user_message(message: types.Message):
             
     except Exception as e:
         print(f"[Bot Logic Error] {e}")
+        # Processing message ကို error message အဖြစ် ပြောင်းလဲဖော်ပြခြင်း
         await processing_msg.edit_text("❌ အမှားအယွင်းတစ်ခု ဖြစ်ပွားခဲ့ပါသည်။")
-        else:
-            await message.answer(ai_response)
