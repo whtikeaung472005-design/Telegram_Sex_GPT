@@ -19,7 +19,6 @@ HEADERS = {
     "Prefer": "return=representation"
 }
 
-# Plan limits
 FREE_RESET_SECONDS = 8 * 3600
 PRO_RESET_SECONDS = 4 * 3600
 FREE_MSG_LIMIT = 20
@@ -28,7 +27,6 @@ FREE_CHAR_LIMIT = 1000
 PRO_CHAR_LIMIT = 8000
 
 async def get_session():
-    """AI Service မှ global session ကို ယူသုံးရန်"""
     from ai_service import get_session as ai_get_session
     return await ai_get_session()
 
@@ -36,77 +34,100 @@ async def get_or_create_user(telegram_id: int):
     """User ရှိမရှိ စစ်ဆေးပြီး မရှိလျှင် အသစ်ဆောက်ရန်"""
     url = f"{SUPABASE_URL}/rest/v1/users?telegram_id=eq.{telegram_id}.select()"
     session = await get_session()
-    async with session.get(url, headers=HEADERS) as response:
-        if response.status != 200 or not (await response.json()):
-            create_url = f"{SUPABASE_URL}/rest/v1/users"
-            data = {
-                "telegram_id": telegram_id, 
-                "plan_type": "free", 
-                "message_count": 0, 
-                "last_reset": int(time.time())
-            }
-            await session.post(create_url, headers=HEADERS, json=data)
+    try:
+        async with session.get(url, headers=HEADERS) as response:
+            data = await response.json()
+            if not data or len(data) == 0:
+                create_url = f"{SUPABASE_URL}/rest/v1/users"
+                payload = {
+                    "telegram_id": telegram_id, 
+                    "plan_type": "free", 
+                    "message_count": 0, 
+                    "last_reset": int(time.time())
+                }
+                await session.post(create_url, headers=HEADERS, json=payload)
+                logger.info(f"[DB] Created new user: {telegram_id}")
+    except Exception as e:
+        logger.error(f"[DB] Error in get_or_create_user: {e}")
 
 async def check_usage_allowed(telegram_id: int) -> tuple:
     """အသုံးပြုခွင့် ရှိမရှိ စစ်ဆေးရန် (is_allowed, reason, char_limit)"""
     url = f"{SUPABASE_URL}/rest/v1/users?telegram_id=eq.{telegram_id}.select()"
     session = await get_session()
-    async with session.get(url, headers=HEADERS) as response:
-        data = await response.json()
-        if not data: 
-            return False, "User not found", 0
-        
-        user = data[0]
-        plan = user.get('plan_type', 'free')
-        count = user.get('message_count', 0)
-        last_reset = user.get('last_reset', 0)
-        
-        now = int(time.time())
-        reset_time = FREE_RESET_SECONDS if plan == 'free' else PRO_RESET_SECONDS
-        limit = FREE_MSG_LIMIT if plan == 'free' else PRO_MSG_LIMIT
-        char_limit = FREE_CHAR_LIMIT if plan == 'free' else PRO_CHAR_LIMIT
+    try:
+        async with session.get(url, headers=HEADERS) as response:
+            data = await response.json()
+            
+            # KeyError: 0 ကို ကာကွယ်ရန် data ရှိမရှိ အရင်စစ်ပါ
+            if not data or len(data) == 0:
+                # User မရှိသေးရင် အသစ်ဆောက်ပေးပြီး အသုံးပြုခွင့် ပေးလိုက်မယ်
+                await get_or_create_user(telegram_id)
+                return True, "New user created", FREE_CHAR_LIMIT
+            
+            user = data[0]
+            plan = user.get('plan_type', 'free')
+            count = user.get('message_count', 0)
+            last_reset = user.get('last_reset', 0)
+            
+            now = int(time.time())
+            reset_time = FREE_RESET_SECONDS if plan == 'free' else PRO_RESET_SECONDS
+            limit = FREE_MSG_LIMIT if plan == 'free' else PRO_MSG_LIMIT
+            char_limit = FREE_CHAR_LIMIT if plan == 'free' else PRO_CHAR_LIMIT
 
-        if now - last_reset > reset_time:
-            update_url = f"{SUPABASE_URL}/rest/v1/users?telegram_id=eq.{telegram_id}"
-            await session.patch(update_url, headers=HEADERS, json={"message_count": 0, "last_reset": now})
-            count = 0
+            if now - last_reset > reset_time:
+                update_url = f"{SUPABASE_URL}/rest/v1/users?telegram_id=eq.{telegram_id}"
+                await session.patch(update_url, headers=HEADERS, json={"message_count": 0, "last_reset": now})
+                count = 0
 
-        if count >= limit:
-            return False, "Limit exceeded", char_limit
-        
-        return True, "Allowed", char_limit
+            if count >= limit:
+                return False, "Limit exceeded", char_limit
+            
+            return True, "Allowed", char_limit
+    except Exception as e:
+        logger.error(f"[DB] Error in check_usage_allowed: {e}")
+        return False, "Database Error", 0
 
 async def update_usage(telegram_id: int, char_count: int):
     """မေးခွန်းအရေအတွက် တိုးရန်"""
     url = f"{SUPABASE_URL}/rest/v1/users?telegram_id=eq.{telegram_id}.select()"
     session = await get_session()
-    async with session.get(url, headers=HEADERS) as response:
-        data = await response.json()
-        if data:
-            current_count = data[0].get('message_count', 0)
-            update_url = f"{SUPABASE_URL}/rest/v1/users?telegram_id=eq.{telegram_id}"
-            await session.patch(update_url, headers=HEADERS, json={"message_count": current_count + 1})
+    try:
+        async with session.get(url, headers=HEADERS) as response:
+            data = await response.json()
+            if data and len(data) > 0:
+                current_count = data[0].get('message_count', 0)
+                update_url = f"{SUPABASE_URL}/rest/v1/users?telegram_id=eq.{telegram_id}"
+                await session.patch(update_url, headers=HEADERS, json={"message_count": current_count + 1})
+    except Exception as e:
+        logger.error(f"[DB] Error in update_usage: {e}")
 
 async def save_chat(telegram_id: int, role: str, content: str):
-    """Chat History ကို သိမ်းဆည်းရန်"""
     url = f"{SUPABASE_URL}/rest/v1/chat_history"
     data = {"telegram_id": telegram_id, "role": role, "content": content}
     session = await get_session()
-    await session.post(url, headers=HEADERS, json=data)
+    try:
+        await session.post(url, headers=HEADERS, json=data)
+    except Exception as e:
+        logger.error(f"[DB] Error in save_chat: {e}")
 
 async def get_chat_history(telegram_id: int, limit: int = 10) -> List[Dict[str, str]]:
-    """Chat History ကို ပြန်ခေါ်ရန်"""
     url = f"{SUPABASE_URL}/rest/v1/chat_history?telegram_id=eq.{telegram_id}&order=created_at.desc&limit={limit}"
     session = await get_session()
-    async with session.get(url, headers=HEADERS) as response:
-        if response.status == 200:
-            data = await response.json()
-            return [{"role": row["role"], "content": row["content"]} for row in data][::-1]
-        return []
+    try:
+        async with session.get(url, headers=HEADERS) as response:
+            if response.status == 200:
+                data = await response.json()
+                return [{"role": row["role"], "content": row["content"]} for row in data][::-1]
+    except Exception as e:
+        logger.error(f"[DB] Error in get_chat_history: {e}")
+    return []
 
 async def clear_history(telegram_id: int) -> bool:
-    """History အားလုံးကို ဖျက်ရန်"""
     url = f"{SUPABASE_URL}/rest/v1/chat_history?telegram_id=eq.{telegram_id}"
     session = await get_session()
-    async with session.delete(url, headers=HEADERS) as response:
-        return response.status in (200, 204)
+    try:
+        async with session.delete(url, headers=HEADERS) as response:
+            return response.status in (200, 204)
+    except Exception as e:
+        logger.error(f"[DB] Error in clear_history: {e}")
+        return False
