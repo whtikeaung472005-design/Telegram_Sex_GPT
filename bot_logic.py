@@ -4,6 +4,7 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from dotenv import load_dotenv
+from aiogram.types import BotCommand
 
 # Import our custom modules
 from db_manager import check_usage_allowed, update_usage, get_or_create_user, save_chat, get_chat_history, clear_history
