@@ -26,7 +26,7 @@ def get_upgrade_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 # --- Handlers ---
-WELCOME_GIF_URL = os.getenv("https://srtteanzawxfaadaoelk.supabase.co/storage/v1/object/public/Telegram%20Ai%20photo/sexgpt.gif")
+WELCOME_GIF_URL = "https://srtteanzawxfaadaoelk.supabase.co/storage/v1/object/public/Telegram%20Ai%20photo/sexgpt.gif"
 
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
