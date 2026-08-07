@@ -19,16 +19,12 @@ HEADERS = {
     "Prefer": "return=representation"
 }
 
-# --- မင်းတောင်းဆိုတဲ့ Limit များကို ဒီနေရာမှာ ညှိထားပါတယ် ---
-FREE_RESET_SECONDS = 8 * 3600  # 8 Hours
-PRO_RESET_SECONDS = 4 * 3600    # 4 Hours
-
+FREE_RESET_SECONDS = 8 * 3600
+PRO_RESET_SECONDS = 4 * 3600
 FREE_MSG_LIMIT = 20
 PRO_MSG_LIMIT = 100
-
 FREE_CHAR_LIMIT = 1000
 PRO_CHAR_LIMIT = 8000
-# -----------------------------------------------------
 
 async def get_session():
     from ai_service import get_session as ai_get_session
@@ -39,30 +35,41 @@ async def get_or_create_user(telegram_id: int):
     session = await get_session()
     try:
         async with session.get(url, headers=HEADERS) as response:
-            data = await response.json()
-            if not data or len(data) == 0:
-                create_url = f"{SUPABASE_URL}/rest/v1/users"
-                payload = {
-                    "telegram_id": telegram_id, 
-                    "plan_type": "free", 
-                    "message_count": 0, 
-                    "last_reset": int(time.time())
-                }
-                await session.post(create_url, headers=HEADERS, json=payload)
+            if response.status == 200:
+                data = await response.json()
+                if not data or len(data) == 0:
+                    create_url = f"{SUPABASE_URL}/rest/v1/users"
+                    payload = {
+                        "telegram_id": telegram_id, 
+                        "plan_type": "free", 
+                        "message_count": 0, 
+                        "last_reset": int(time.time())
+                    }
+                    await session.post(create_url, headers=HEADERS, json=payload)
+                    logger.info(f"[DB] Created new user: {telegram_id}")
+            else:
+                logger.error(f"[DB] Get user error: {response.status}")
     except Exception as e:
-        logger.error(f"[DB] Error in get_or_create_user: {e}")
+        logger.error(f"[DB] Exception in get_or_create_user: {str(e)}")
 
 async def check_usage_allowed(telegram_id: int) -> tuple:
     url = f"{SUPABASE_URL}/rest/v1/users?telegram_id=eq.{telegram_id}.select()"
     session = await get_session()
     try:
         async with session.get(url, headers=HEADERS) as response:
+            if response.status != 200:
+                logger.error(f"[DB] Supabase returned error status: {response.status}")
+                return False, "Supabase Error", 0
+                
             data = await response.json()
+            
             if not data or len(data) == 0:
+                logger.info(f"[DB] User {telegram_id} not found, creating now...")
                 await get_or_create_user(telegram_id)
                 return True, "New user created", FREE_CHAR_LIMIT
             
             user = data[0]
+            # Column နာမည်တွေ မှားနေရင် ဒီနေရာမှာ KeyError တက်မယ်
             plan = user.get('plan_type', 'free')
             count = user.get('message_count', 0)
             last_reset = user.get('last_reset', 0)
@@ -82,8 +89,9 @@ async def check_usage_allowed(telegram_id: int) -> tuple:
             
             return True, "Allowed", char_limit
     except Exception as e:
-        logger.error(f"[DB] Error in check_usage_allowed: {e}")
-        return False, "Database Error", 0
+        # အမှားကို အတိအကျ သိရအောင် traceback ပြခိုင်းမယ်
+        logger.exception(f"[DB] CRITICAL ERROR in check_usage_allowed: {str(e)}")
+        return False, "Database Exception", 0
 
 async def update_usage(telegram_id: int, char_count: int):
     url = f"{SUPABASE_URL}/rest/v1/users?telegram_id=eq.{telegram_id}.select()"
@@ -108,7 +116,6 @@ async def save_chat(telegram_id: int, role: str, content: str):
         logger.error(f"[DB] Error in save_chat: {e}")
 
 async def get_chat_history(telegram_id: int, limit: int = 20) -> List[Dict[str, str]]:
-    """Conversation History ကို အတော့်အသန် မှတ်မိစေရန် limit ကို ၂၀ ထိ တိုးထားသည်"""
     url = f"{SUPABASE_URL}/rest/v1/chat_history?telegram_id=eq.{telegram_id}&order=created_at.desc&limit={limit}"
     session = await get_session()
     try:
