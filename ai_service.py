@@ -1,7 +1,7 @@
 # Filename: ai_service.py
 import os
 import aiohttp
-from typing import Optional
+from typing import Optional, List, Dict
 from dotenv import load_dotenv
 
 load_dotenv()
