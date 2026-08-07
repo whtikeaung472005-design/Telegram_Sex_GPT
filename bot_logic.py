@@ -36,7 +36,7 @@ async def cmd_start(message: types.Message):
     welcome_text = (
         f"မင်္ဂလာပါ {message.from_user.first_name}!\n\n"
         "ကျွန်တော်ကတော့ ပညာရေးနဲ့ ပတ်သက်ပြီး သင်သိချင်တာတွေကို ဖြေကြားပေးမယ့် AI Agent Bot ဖြစ်ပါတယ်။\n\n"
-        "✨ Free Plan အနေနဲ့ ၈ နာရီအတွင်း မေးခွန်း (၃၀) ခု နှင့် စာလုံးရေ (၁၀၀၀) အထိ မေးမြန်းနိုင်ပါတယ်။\n\n"
+        "✨ Free Plan အနေနဲ့ ၈ နာရီအတွင်း မေးခွန်း (၂၀) ခု နှင့် စာလုံးရေ (၁၀၀၀) အထိ မေးမြန်းနိုင်ပါတယ်။\n\n"
         "သင့်ရဲ့ မေးခွန်းတွေကို ယခုပဲ စတင်မေးမြန်းနိုင်ပါပြီ!"
     )
     await message.answer(welcome_text)
@@ -71,7 +71,7 @@ async def handle_user_message(message: types.Message):
     user_id = message.from_user.id
     user_text = message.text
     
-    # 1. Check Usage Limits (ယခုအခါ char_limit ကိုပါ ပြန်ပေးပါမည်)
+    # 1. Check Usage Limits 
     is_allowed, reason, char_limit = await check_usage_allowed(user_id)
     
     if not is_allowed:
@@ -87,19 +87,17 @@ async def handle_user_message(message: types.Message):
             await message.answer("❌ တောင်းပန်ပါတယ်။ ယခုအချိန်တွင် AI စနစ် ချို့ယွင်းနေပါသည်။ ခဏအကြာမှ ထပ်မံကြိုးစားကြည့်ပါ။")
             return
             
-        # 3. Truncate Response if it exceeds the limit (အရေးကြီးသော အပိုင်း)
+        # 3. Truncate Response if it exceeds the limit
         if len(ai_response) > char_limit:
             ai_response = ai_response[:char_limit] + f"\n\n[⚠️ သင့် Plan ၏ တစ်ကြိမ်စာ စာလုံးရေ ကန့်သတ်ချက် ({char_limit}) ပြည့်သွားပါသဖြင့် အဖြေကို ရပ်တန့်လိုက်ပါသည်။]"
             
-        # 4. Calculate output length & Update DB (Message အကြိမ်ရေကိုသာ အဓိက တိုးပါမည်)
+        # 4. Calculate output length & Update DB 
         output_length = len(ai_response)
         await update_usage(user_id, output_length)
         
-        # 5. Send response back to user
+        # 5. Send response back to user (Syntax Error ရှင်းလင်းပြီး)
         if len(ai_response) > 4096:
             for x in range(0, len(ai_response), 4096):
                 await message.answer(ai_response[x:x+4096])
-        else:
-            await message.answer(ai_response)
         else:
             await message.answer(ai_response)
