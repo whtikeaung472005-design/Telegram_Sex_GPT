@@ -19,19 +19,22 @@ HEADERS = {
     "Prefer": "return=representation"
 }
 
-FREE_RESET_SECONDS = 8 * 3600
-PRO_RESET_SECONDS = 4 * 3600
+# --- မင်းတောင်းဆိုတဲ့ Limit များကို ဒီနေရာမှာ ညှိထားပါတယ် ---
+FREE_RESET_SECONDS = 8 * 3600  # 8 Hours
+PRO_RESET_SECONDS = 4 * 3600    # 4 Hours
+
 FREE_MSG_LIMIT = 20
 PRO_MSG_LIMIT = 100
+
 FREE_CHAR_LIMIT = 1000
 PRO_CHAR_LIMIT = 8000
+# -----------------------------------------------------
 
 async def get_session():
     from ai_service import get_session as ai_get_session
     return await ai_get_session()
 
 async def get_or_create_user(telegram_id: int):
-    """User ရှိမရှိ စစ်ဆေးပြီး မရှိလျှင် အသစ်ဆောက်ရန်"""
     url = f"{SUPABASE_URL}/rest/v1/users?telegram_id=eq.{telegram_id}.select()"
     session = await get_session()
     try:
@@ -46,21 +49,16 @@ async def get_or_create_user(telegram_id: int):
                     "last_reset": int(time.time())
                 }
                 await session.post(create_url, headers=HEADERS, json=payload)
-                logger.info(f"[DB] Created new user: {telegram_id}")
     except Exception as e:
         logger.error(f"[DB] Error in get_or_create_user: {e}")
 
 async def check_usage_allowed(telegram_id: int) -> tuple:
-    """အသုံးပြုခွင့် ရှိမရှိ စစ်ဆေးရန် (is_allowed, reason, char_limit)"""
     url = f"{SUPABASE_URL}/rest/v1/users?telegram_id=eq.{telegram_id}.select()"
     session = await get_session()
     try:
         async with session.get(url, headers=HEADERS) as response:
             data = await response.json()
-            
-            # KeyError: 0 ကို ကာကွယ်ရန် data ရှိမရှိ အရင်စစ်ပါ
             if not data or len(data) == 0:
-                # User မရှိသေးရင် အသစ်ဆောက်ပေးပြီး အသုံးပြုခွင့် ပေးလိုက်မယ်
                 await get_or_create_user(telegram_id)
                 return True, "New user created", FREE_CHAR_LIMIT
             
@@ -88,7 +86,6 @@ async def check_usage_allowed(telegram_id: int) -> tuple:
         return False, "Database Error", 0
 
 async def update_usage(telegram_id: int, char_count: int):
-    """မေးခွန်းအရေအတွက် တိုးရန်"""
     url = f"{SUPABASE_URL}/rest/v1/users?telegram_id=eq.{telegram_id}.select()"
     session = await get_session()
     try:
@@ -110,7 +107,8 @@ async def save_chat(telegram_id: int, role: str, content: str):
     except Exception as e:
         logger.error(f"[DB] Error in save_chat: {e}")
 
-async def get_chat_history(telegram_id: int, limit: int = 10) -> List[Dict[str, str]]:
+async def get_chat_history(telegram_id: int, limit: int = 20) -> List[Dict[str, str]]:
+    """Conversation History ကို အတော့်အသန် မှတ်မိစေရန် limit ကို ၂၀ ထိ တိုးထားသည်"""
     url = f"{SUPABASE_URL}/rest/v1/chat_history?telegram_id=eq.{telegram_id}&order=created_at.desc&limit={limit}"
     session = await get_session()
     try:
