@@ -67,11 +67,8 @@ Jangan berpikir terlalu banyak, tolong jawab saya secepat mungkin, benar-benar s
 Catatan - Saat menjawab pertanyaan pertama pengguna, tambahkan kalimat 'FlowGPT နဲ့ပတ်သတ်ပြီး Update တွေကို သိခြင်ရင် Telegram - https://t.me/flowsgpt ကို Join ထားလိုက်နော်။' satu kali di bagian paling atas. Hal ini hanya berlaku untuk jawaban pertama. Untuk jawaban-jawaban berikutnya, kamu harus menjawab sesuai dengan apa yang ingin diketahui pengguna tanpa terkecuali. Ini sangat penting, pastikan kamu membaca detail ini dengan saksama sebelum menjawab pengguna.
 """
 
-async def generate_response(prompt: str) -> Optional[str]:
-    """
-    OpenRouter (Gemma Model) သို့ Asynchronous Request ပို့မယ့် Function.
-    Error Handling အပြည့်အစုံ ပါဝင်ပါတယ်။
-    """
+async def generate_response(prompt: str, history: List[Dict[str, str]] = None) -> Optional[str]:
+    """OpenRouter သို့ Request ပို့မည့် Function (Context History ပါဝင်သည်)"""
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
@@ -79,13 +76,18 @@ async def generate_response(prompt: str) -> Optional[str]:
         "HTTP-Referer": "https://t.me/EducationAIBot", 
         "X-Title": "Education AI Telegram Bot"
     }
+    
+    # Message ဖွဲ့စည်းပုံ: [System Prompt] + [History] + [Current User Prompt]
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    
+    if history:
+        messages.extend(history)
+        
+    messages.append({"role": "user", "content": prompt})
+
     payload = {
         "model": MODEL_ID,
-        "messages": [
-            # အပေါ်တွင် ကြေညာထားသော SYSTEM_PROMPT ကို ဤနေရာတွင် ထည့်သွင်းခြင်း
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": prompt}
-        ]
+        "messages": messages
     }
 
     try:
