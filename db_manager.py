@@ -19,13 +19,13 @@ HEADERS = {
 
 # Plan limits configuration (Seconds)
 FREE_RESET_SECONDS = 8 * 3600  # 8 Hours
-PRO_RESET_SECONDS = 3 * 3600   # 3 Hours
+PRO_RESET_SECONDS = 4 * 3600   # 4 Hours
 
-FREE_MSG_LIMIT = 30
-FREE_OUT_LIMIT = 1000
-
+FREE_MSG_LIMIT = 20
 PRO_MSG_LIMIT = 100
-PRO_OUT_LIMIT = 8000
+
+FREE_CHAR_LIMIT = 1000
+PRO_CHAR_LIMIT = 8000
 
 async def get_or_create_user(telegram_id: int) -> Dict[str, Any]:
     """
@@ -84,25 +84,21 @@ async def _check_and_reset_limits(user_data: Dict[str, Any]) -> Dict[str, Any]:
     
     return user_data
 
-async def check_usage_allowed(telegram_id: int) -> tuple[bool, str]:
+async def check_usage_allowed(telegram_id: int) -> tuple[bool, str, int]:
     """
-    User ဟာ ဆက်သုံးခွင့်ရှိ/မရှိ စစ်ဆေးပေးမယ့် Function
+    User ဟာ ဆက်သုံးခွင့်ရှိ/မရှိ နှင့် ၎င်း၏ Plan အရ ရရှိမည့် Character Limit ကို တွဲလျက် ပြန်ပေးမည့် Function
     """
     user = await get_or_create_user(telegram_id)
     plan = user["plan_type"]
     msg_count = user["message_count"]
-    token_count = user["token_count"]
     
     msg_limit = PRO_MSG_LIMIT if plan == "pro" else FREE_MSG_LIMIT
-    token_limit = PRO_OUT_LIMIT if plan == "pro" else FREE_OUT_LIMIT
+    char_limit = PRO_CHAR_LIMIT if plan == "pro" else FREE_CHAR_LIMIT
     
     if msg_count >= msg_limit:
-        return False, "MESSAGE_LIMIT_REACHED"
-    
-    if token_count >= token_limit:
-        return False, "TOKEN_LIMIT_REACHED"
+        return False, "MESSAGE_LIMIT_REACHED", char_limit
         
-    return True, "ALLOWED"
+    return True, "ALLOWED", char_limit
 
 async def update_usage(telegram_id: int, output_length: int) -> None:
     """
