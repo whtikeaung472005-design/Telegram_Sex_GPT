@@ -79,25 +79,37 @@ async def handle_user_message(message: types.Message):
         await message.answer(limit_msg, reply_markup=get_upgrade_keyboard())
         return
 
-    async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
-        # 2. Get AI Response
+    # 2. Send "Loading" Message (Typing အစား ယာယီ Message ပို့ခြင်း - Bulletproof UX)
+    processing_msg = await message.answer("⏳ MathGPT စဉ်းစားနေပါတယ်... ခဏလေးစောင့်ပေးပါ။")
+
+    try:
+        # 3. Get AI Response
         ai_response = await generate_response(user_text)
         
         if not ai_response:
-            await message.answer("❌ တောင်းပန်ပါတယ်။ ယခုအချိန်တွင် AI စနစ် ချို့ယွင်းနေပါသည်။ ခဏအကြာမှ ထပ်မံကြိုးစားကြည့်ပါ။")
+            # ယာယီ Message ကို Error Message ဖြင့် အစားထိုးခြင်း
+            await processing_msg.edit_text("❌ တောင်းပန်ပါတယ်။ ယခုအချိန်တွင် AI စနစ် ချို့ယွင်းနေပါသည်။ ခဏအကြာမှ ထပ်မံကြိုးစားကြည့်ပါ။")
             return
             
-        # 3. Truncate Response if it exceeds the limit
+        # 4. Truncate Response if it exceeds the limit
         if len(ai_response) > char_limit:
             ai_response = ai_response[:char_limit] + f"\n\n[⚠️ သင့် Plan ၏ တစ်ကြိမ်စာ စာလုံးရေ ကန့်သတ်ချက် ({char_limit}) ပြည့်သွားပါသဖြင့် အဖြေကို ရပ်တန့်လိုက်ပါသည်။]"
             
-        # 4. Calculate output length & Update DB 
+        # 5. Calculate output length & Update DB 
         output_length = len(ai_response)
         await update_usage(user_id, output_length)
         
-        # 5. Send response back to user (Syntax Error ရှင်းလင်းပြီး)
+        # 6. Delete Loading Message and Send Final Response
+        await processing_msg.delete() # ယာယီ Message ကို ဖျက်လိုက်ပါပြီ
+        
         if len(ai_response) > 4096:
             for x in range(0, len(ai_response), 4096):
                 await message.answer(ai_response[x:x+4096])
+        else:
+            await message.answer(ai_response)
+            
+    except Exception as e:
+        print(f"[Bot Logic Error] {e}")
+        await processing_msg.edit_text("❌ အမှားအယွင်းတစ်ခု ဖြစ်ပွားခဲ့ပါသည်။")
         else:
             await message.answer(ai_response)
