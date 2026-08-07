@@ -79,7 +79,7 @@ async def handle_user_message(message: types.Message):
         return
 
     # 2. Send "Loading" Message (Typing အစား ယာယီ Message ပို့ခြင်း - Bulletproof UX)
-    processing_msg = await message.answer("⏳ MathGPT စဉ်းစားနေပါတယ်... ခဏလေးစောင့်ပေးပါ။")
+    processing_msg = await message.answer("⏳ SEX GPT စဉ်းစားနေပါတယ်... ခဏလေးစောင့်ပေးပါ။")
 
     try:
         # 3. Get AI Response
