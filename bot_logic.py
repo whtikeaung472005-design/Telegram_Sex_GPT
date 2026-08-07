@@ -26,6 +26,8 @@ def get_upgrade_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 # --- Handlers ---
+WELCOME_GIF_URL = os.getenv("https://srtteanzawxfaadaoelk.supabase.co/storage/v1/object/public/Telegram%20Ai%20photo/sexgpt.gif")
+
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
     """User မှ /start နှိပ်သည့်အခါ အလုပ်လုပ်မည့် Function"""
@@ -34,11 +36,15 @@ async def cmd_start(message: types.Message):
     
     welcome_text = (
         f"မင်္ဂလာပါ {message.from_user.first_name}!\n\n"
-        "ကျွန်တော်ကတော့ ပညာရေးနဲ့ ပတ်သက်ပြီး သင်သိချင်တာတွေကို ဖြေကြားပေးမယ့် AI Agent Bot ဖြစ်ပါတယ်။\n\n"
-        "✨ Free Plan အနေနဲ့ ၈ နာရီအတွင်း မေးခွန်း (၂၀) ခု နှင့် စာလုံးရေ (၁၀၀၀) အထိ မေးမြန်းနိုင်ပါတယ်။\n\n"
+        "သင့်ရဲ့ အလိုရမ္မက်တွေကို ဖြည့်ဆီးပေးဖို့ ကျွန်မ Sex GPT က သင့်အနားရှိနေပါပြီ။\n\n"
+        "တူတူ မှောင်ဖို့အတွက် အဆင့်သင့်ဖြစ်နေပါပြီ။\n"
         "သင့်ရဲ့ မေးခွန်းတွေကို ယခုပဲ စတင်မေးမြန်းနိုင်ပါပြီ!"
     )
-    await message.answer(welcome_text)
+    if WELCOME_GIF_URL:
+        # GIF အတွက် answer_animation ကို အသုံးပြုခြင်း
+        await message.answer_animation(animation=WELCOME_GIF_URL, caption=welcome_text)
+    else:
+        await message.answer(welcome_text) # အရန်အဖြစ် (Fallback)
 
 @dp.message(Command("status"))
 async def cmd_status(message: types.Message):
