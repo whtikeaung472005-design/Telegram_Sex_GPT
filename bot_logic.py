@@ -48,14 +48,16 @@ async def cmd_status(message: types.Message):
     user_data = await get_or_create_user(user_id)
     
     plan_type = "💎 Pro Plan" if user_data["plan_type"] == "pro" else "🆓 Free Plan"
-    msg_limit = 100 if user_data["plan_type"] == "pro" else 30
-    token_limit = 8000 if user_data["plan_type"] == "pro" else 1000
+    msg_limit = 100 if user_data["plan_type"] == "pro" else 20
+    char_limit = 8000 if user_data["plan_type"] == "pro" else 1000
+    reset_hours = 4 if user_data["plan_type"] == "pro" else 8
     
     status_text = (
         f"📊 **သင့်ရဲ့ အသုံးပြုမှု အခြေအနေ**\n\n"
         f"Plan: {plan_type}\n"
         f"Messages Used: {user_data['message_count']} / {msg_limit}\n"
-        f"Characters Used: {user_data['token_count']} / {token_limit}\n"
+        f"Reset Time: မေးခွန်းပြည့်သွားပါက {reset_hours} နာရီ စောင့်ရပါမည်။\n"
+        f"Max Length: တစ်ခါဖြေလျှင် စာလုံးရေ {char_limit} အထိ ရရှိမည်။\n"
     )
     
     if user_data["plan_type"] == "free":
@@ -63,67 +65,41 @@ async def cmd_status(message: types.Message):
     else:
         await message.answer(status_text)
 
-@dp.callback_query(F.data == "buy_pro")
-async def process_buy_pro(callback: CallbackQuery):
-    """User မှ 'Pro ဝယ်ယူရန်' ခလုတ်ကို နှိပ်သည့်အခါ"""
-    user_id = callback.from_user.id
-    username = callback.from_user.username or "No Username"
-    
-    # Notify User
-    await callback.message.answer(
-        "🙏 စိတ်ဝင်စားတဲ့အတွက် ကျေးဇူးတင်ပါတယ်။ သင့်ရဲ့ အချက်အလက်ကို Admin ထံ ပေးပို့လိုက်ပါပြီ။\n"
-        "Admin မှ သင့်အား မကြာမီ ဆက်သွယ်ပေးပါလိမ့်မည်။"
-    )
-    await callback.answer()
-    
-    # Notify Admin
-    if ADMIN_ID:
-        admin_alert = (
-            f"💰 **New Pro Plan Request!**\n\n"
-            f"User ID: `{user_id}`\n"
-            f"Username: @{username}\n\n"
-            f"Database ထဲတွင် အထက်ပါ User ID အား plan_type 'pro' ဟု ပြောင်းပေးပါ။"
-        )
-        try:
-            await bot.send_message(chat_id=ADMIN_ID, text=admin_alert, parse_mode="Markdown")
-        except Exception as e:
-            print(f"[Admin Alert Error] Failed to send alert to admin: {e}")
-
 @dp.message(F.text)
 async def handle_user_message(message: types.Message):
     """User ထံမှ ဝင်လာသော စာများကို လက်ခံပြီး AI ထံ ပို့ပေးခြင်း"""
     user_id = message.from_user.id
     user_text = message.text
     
-    # 1. Check Usage Limits
-    is_allowed, reason = await check_usage_allowed(user_id)
+    # 1. Check Usage Limits (ယခုအခါ char_limit ကိုပါ ပြန်ပေးပါမည်)
+    is_allowed, reason, char_limit = await check_usage_allowed(user_id)
     
     if not is_allowed:
-        if reason == "MESSAGE_LIMIT_REACHED":
-            limit_msg = "⚠️ သင်၏ အခမဲ့ မေးခွန်းအရေအတွက် (Limit) ပြည့်သွားပါပြီ။ အချိန်ပြည့်ရန် စောင့်ပါ သို့မဟုတ် Pro Plan သို့ ပြောင်းလဲပါ။"
-        else:
-            limit_msg = "⚠️ သင်၏ အခမဲ့ စာလုံးရေ (Character Limit) ပြည့်သွားပါပြီ။ အချိန်ပြည့်ရန် စောင့်ပါ သို့မဟုတ် Pro Plan သို့ ပြောင်းလဲပါ။"
-            
+        limit_msg = "⚠️ သင်၏ မေးခွန်းအရေအတွက် (Limit) ပြည့်သွားပါပြီ။ သတ်မှတ်ချိန်ပြည့်ရန် စောင့်ပါ သို့မဟုတ် Pro Plan သို့ ပြောင်းလဲပါ။"
         await message.answer(limit_msg, reply_markup=get_upgrade_keyboard())
         return
 
-    # 2. Show "Typing..." action to user while AI is thinking
     async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
-        # 3. Get AI Response
+        # 2. Get AI Response
         ai_response = await generate_response(user_text)
         
         if not ai_response:
             await message.answer("❌ တောင်းပန်ပါတယ်။ ယခုအချိန်တွင် AI စနစ် ချို့ယွင်းနေပါသည်။ ခဏအကြာမှ ထပ်မံကြိုးစားကြည့်ပါ။")
             return
             
-        # 4. Calculate output length & Update DB
+        # 3. Truncate Response if it exceeds the limit (အရေးကြီးသော အပိုင်း)
+        if len(ai_response) > char_limit:
+            ai_response = ai_response[:char_limit] + f"\n\n[⚠️ သင့် Plan ၏ တစ်ကြိမ်စာ စာလုံးရေ ကန့်သတ်ချက် ({char_limit}) ပြည့်သွားပါသဖြင့် အဖြေကို ရပ်တန့်လိုက်ပါသည်။]"
+            
+        # 4. Calculate output length & Update DB (Message အကြိမ်ရေကိုသာ အဓိက တိုးပါမည်)
         output_length = len(ai_response)
         await update_usage(user_id, output_length)
         
         # 5. Send response back to user
-        # Safe sending: Very long AI responses (over 4096 chars) need to be chunked in Telegram
         if len(ai_response) > 4096:
             for x in range(0, len(ai_response), 4096):
                 await message.answer(ai_response[x:x+4096])
+        else:
+            await message.answer(ai_response)
         else:
             await message.answer(ai_response)
