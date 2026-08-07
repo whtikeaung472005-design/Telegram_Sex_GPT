@@ -31,7 +31,8 @@ async def get_session():
     return await ai_get_session()
 
 async def get_or_create_user(telegram_id: int):
-    url = f"{SUPABASE_URL}/rest/v1/users?telegram_id=eq.{telegram_id}.select()"
+    # URL ကို ပိုပြီး သေချာအောင် ရေးထားသည်
+    url = f"{SUPABASE_URL}/rest/v1/users?telegram_id=eq.{telegram_id}"
     session = await get_session()
     try:
         async with session.get(url, headers=HEADERS) as response:
@@ -47,29 +48,27 @@ async def get_or_create_user(telegram_id: int):
                     }
                     await session.post(create_url, headers=HEADERS, json=payload)
                     logger.info(f"[DB] Created new user: {telegram_id}")
-            else:
-                logger.error(f"[DB] Get user error: {response.status}")
     except Exception as e:
         logger.error(f"[DB] Exception in get_or_create_user: {str(e)}")
 
 async def check_usage_allowed(telegram_id: int) -> tuple:
-    url = f"{SUPABASE_URL}/rest/v1/users?telegram_id=eq.{telegram_id}.select()"
+    # .select() ကို ဖြုတ်ပြီး ပိုရှင်းတဲ့ query ပုံစံသုံးထားသည်
+    url = f"{SUPABASE_URL}/rest/v1/users?telegram_id=eq.{telegram_id}"
     session = await get_session()
     try:
         async with session.get(url, headers=HEADERS) as response:
             if response.status != 200:
-                logger.error(f"[DB] Supabase returned error status: {response.status}")
+                logger.error(f"[DB] Supabase error: {response.status} - {await response.text()}")
                 return False, "Supabase Error", 0
                 
             data = await response.json()
             
             if not data or len(data) == 0:
-                logger.info(f"[DB] User {telegram_id} not found, creating now...")
                 await get_or_create_user(telegram_id)
+                # User အသစ်ဆောက်ပြီးရင် တစ်ခါပြန်ခေါ်ပြီး data ယူမယ်
                 return True, "New user created", FREE_CHAR_LIMIT
             
             user = data[0]
-            # Column နာမည်တွေ မှားနေရင် ဒီနေရာမှာ KeyError တက်မယ်
             plan = user.get('plan_type', 'free')
             count = user.get('message_count', 0)
             last_reset = user.get('last_reset', 0)
@@ -89,20 +88,19 @@ async def check_usage_allowed(telegram_id: int) -> tuple:
             
             return True, "Allowed", char_limit
     except Exception as e:
-        # အမှားကို အတိအကျ သိရအောင် traceback ပြခိုင်းမယ်
-        logger.exception(f"[DB] CRITICAL ERROR in check_usage_allowed: {str(e)}")
+        logger.exception(f"[DB] CRITICAL ERROR: {str(e)}")
         return False, "Database Exception", 0
 
 async def update_usage(telegram_id: int, char_count: int):
-    url = f"{SUPABASE_URL}/rest/v1/users?telegram_id=eq.{telegram_id}.select()"
+    url = f"{SUPABASE_URL}/rest/v1/users?telegram_id=eq.{telegram_id}"
     session = await get_session()
     try:
+        # လက်ရှိ count ကို အရင်ယူပြီးမှ တိုးမယ်
         async with session.get(url, headers=HEADERS) as response:
             data = await response.json()
             if data and len(data) > 0:
                 current_count = data[0].get('message_count', 0)
-                update_url = f"{SUPABASE_URL}/rest/v1/users?telegram_id=eq.{telegram_id}"
-                await session.patch(update_url, headers=HEADERS, json={"message_count": current_count + 1})
+                await session.patch(url, headers=HEADERS, json={"message_count": current_count + 1})
     except Exception as e:
         logger.error(f"[DB] Error in update_usage: {e}")
 
