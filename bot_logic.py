@@ -102,26 +102,51 @@ async def cmd_status(message: types.Message):
         else:
             await message.answer("❌ Database ချိတ်ဆက်မှု အမှားရှိနေပါသည်။")
 
-@dp.message(Command("givepro"))
-async def cmd_give_pro(message: types.Message):
+# --- ၇ ရက် Plan ပေးရန် ---
+@dp.message(Command("givepro7"))
+async def cmd_give_pro_7days(message: types.Message):
+    """Admin မှ User ကို ၇ ရက် Pro ပေးရန်: /givepro7 12345678"""
     if str(message.from_user.id) != ADMIN_ID:
         return await message.answer("❌ သင်သည် ဤ Command ကို အသုံးပြုခွင့်မရှိပါ။")
 
     args = message.text.split()
     if len(args) < 2:
-        return await message.answer("⚠️ အသုံးပြုပုံ မှားယွင်းနေပါသည်။\nဥပမာ- `/givepro 12345678`", parse_mode="Markdown")
+        return await message.answer("⚠️ အသုံးပြုပုံ: `/givepro7 12345678`", parse_mode="Markdown")
 
     target_user_id = args[1]
-    try:
-        success = await set_user_plan(int(target_user_id), "pro")
-        if success:
-            await message.answer(f"✅ User `{target_user_id}` ကို Pro Plan ပေးပြီးပါပြီ။", parse_mode="Markdown")
-            try:
-                await bot.send_message(target_user_id, "🎉 ဂုဏ်ယူပါတယ်! သင့်ကို Pro Plan အဆင့်မြှင့်ပေးလိုက်ပါပြီ။")
-            except:
-                pass
-        else:
-            await message.answer("❌ အမှားတစ်ခု ဖြစ်ပွားခဲ့ပါသည်။")
+    # days=7 လို့ သတ်မှတ်ပေးလိုက်တယ်
+    success = await set_user_plan(int(target_user_id), "pro", days=7)
+    
+    if success:
+        await message.answer(f"✅ User `{target_user_id}` ကို ၇ ရက် Pro Plan ပေးပြီးပါပြီ။", parse_mode="Markdown")
+        try:
+            await bot.send_message(target_user_id, "🎉 ဂုဏ်ယူပါတယ်! သင့်ကို ၇ ရက်တာ Pro Plan အဆင့်မြှင့်ပေးလိုက်ပါပြီ။")
+        except: pass
+    else:
+        await message.answer("❌ အမှားတစ်ခု ဖြစ်ပွားခဲ့ပါသည်။")
+
+# --- ၁ လ (ရက် ၃၀) Plan ပေးရန် ---
+@dp.message(Command("givepro30"))
+async def cmd_give_pro_30days(message: types.Message):
+    """Admin မှ User ကို ၁ လ Pro ပေးရန်: /givepro30 12345678"""
+    if str(message.from_user.id) != ADMIN_ID:
+        return await message.answer("❌ သင်သည် ဤ Command ကို အသုံးပြုခွင့်မရှိပါ။")
+
+    args = message.text.split()
+    if len(args) < 2:
+        return await message.answer("⚠️ အသုံးပြုပုံ: `/givepro30 12345678`", parse_mode="Markdown")
+
+    target_user_id = args[1]
+    # days=30 လို့ သတ်မှတ်ပေးလိုက်တယ်
+    success = await set_user_plan(int(target_user_id), "pro", days=30)
+    
+    if success:
+        await message.answer(f"✅ User `{target_user_id}` ကို ၁ လ Pro Plan ပေးပြီးပါပြီ။", parse_mode="Markdown")
+        try:
+            await bot.send_message(target_user_id, "🎉 ဂုဏ်ယူပါတယ်! သင့်ကို ၁ လတာ Pro Plan အဆင့်မြှင့်ပေးလိုက်ပါပြီ။")
+        except: pass
+    else:
+        await message.answer("❌ အမှားတစ်ခု ဖြစ်ပွားခဲ့ပါသည်။")
     except ValueError:
         await message.answer("❌ User ID သည် နံပါတ်ဖြစ်ရပါမည်။")
 
