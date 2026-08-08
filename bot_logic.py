@@ -78,6 +78,47 @@ async def cmd_give_pro(message: types.Message):
         await message.answer(f"✅ User `{target_user_id}` ကို Pro Plan ပေးပြီးပါပြီ။", parse_mode="Markdown")
         # User ကိုလည်း အကြောင်းကြားပေးမယ်
         try:
+
+    @dp.message(Command("admin"))
+async def cmd_admin(message: types.Message):
+    """Admin နှင့် ဆက်သွယ်ရန် Command"""
+    await message.answer("👨‍💻 Admin နှင့် ဆက်သွယ်ရန် လိုအပ်ပါက အောက်ပါ လင့်ခ်မှတစ်ဆင့် ဆက်သွယ်နိုင်ပါသည်:\n\n👉 @slipme_mm")
+
+@dp.message(Command("status"))
+async def cmd_status(message: types.Message):
+    """User ၏ အသုံးပြုမှု အခြေအနေကို စစ်ဆေးရန်"""
+    user_id = message.from_user.id
+    # check_usage_allowed function ကို သုံးပြီး data ယူမယ်
+    is_allowed, reason, char_limit = await check_usage_allowed(user_id)
+    
+    # Database ကနေ user data ကို ပြန်ဆွဲထုတ်ပြီး ပြမယ်
+    from db_manager import SUPABASE_URL, HEADERS
+    import aiohttp
+    
+    url = f"{SUPABASE_URL}/rest/v1/users?telegram_id=eq.{user_id}"
+    from ai_service import get_session
+    session = await get_session()
+    
+    async with session.get(url, headers=HEADERS) as response:
+        if response.status == 200:
+            data = await response.json()
+            if data:
+                user = data[0]
+                plan = user.get('plan_type', 'free')
+                count = user.get('message_count', 0)
+                
+                status_text = (
+                    f"📊 **သင်၏ အသုံးပြုမှု အခြေအနေ**\n\n"
+                    f"👤 User ID: `{user_id}`\n"
+                    f"💎 Plan: `{plan.upper()}`\n"
+                    f"💬 အသုံးပြုပြီးသမျှ: `{count}` messages\n"
+                    f"📏 တစ်ကြိမ်စာ စာလုံးရေ ကန့်သတ်ချက်: `{char_limit}`"
+                )
+                await message.answer(status_text, parse_mode="Markdown")
+            else:
+                await message.answer("⚠️ အချက်အလက် ရှာမတွေ့ပါ။")
+        else:
+            await message.answer("❌ Database ချိတ်ဆက်မှု အမှားရှိနေပါသည်။")
             await bot.send_message(target_user_id, "🎉 ဂုဏ်ယူပါတယ်! သင့်ကို Pro Plan အဆင့်မြှင့်ပေးလိုက်ပါပြီ။ အခုပဲ အကန့်အသတ်မရှိ အသုံးပြုနိုင်ပါပြီ။")
         except Exception:
             pass # User က Bot ကို block ထားရင် error တက်မှာမို့လို့ ignore လုပ်ထားတာ
