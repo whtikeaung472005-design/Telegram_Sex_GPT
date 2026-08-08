@@ -6,13 +6,23 @@ from aiogram.filters import CommandStart, Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, BotCommand
 from dotenv import load_dotenv
 
-from db_manager import check_usage_allowed, update_usage, get_or_create_user, save_chat, get_chat_history, clear_history
+# Import necessary functions from db_manager
+from db_manager import (
+    check_usage_allowed, 
+    update_usage, 
+    get_or_create_user, 
+    save_chat, 
+    get_chat_history, 
+    clear_history, 
+    set_user_plan
+)
 from ai_service import generate_response
 
 load_dotenv()
 logger = logging.getLogger(__name__)
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_ID = os.getenv("ADMIN_ID")
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
@@ -43,7 +53,8 @@ async def setup_bot_commands(bot: Bot):
     bot_commands = [
         BotCommand(command="/new_chat", description="🔄 New Chat စတင်ရန်"),
         BotCommand(command="/admin", description="👨‍💻 Admin နှင့် ဆက်သွယ်ရန်"),
-        BotCommand(command="/status", description="📊 အသုံးပြုမှု စစ်ဆေးရန်")
+        BotCommand(command="/status", description="📊 အသုံးပြုမှု စစ်ဆေးရန်"),
+        BotCommand(command="/givepro", description="💎 User ကို Pro ပေးရန် (Admin Only)")
     ]
     await bot.set_my_commands(bot_commands)
 
@@ -55,48 +66,20 @@ async def cmd_new_chat(message: types.Message):
     else:
         await message.answer("⚠️ အမှားတစ်ခု ဖြစ်ပွားခဲ့ပါသည်။")
 
-ADMIN_ID = os.getenv("ADMIN_ID")
-
-@dp.message(Command("givepro"))
-async def cmd_give_pro(message: types.Message):
-    """Admin မှ User တစ်ဦးကို Pro ပေးရန်: /givepro 12345678"""
-    # Admin ဟုတ်မဟုတ် အရင်စစ်မယ်
-    if str(message.from_user.id) != ADMIN_ID:
-        return await message.answer("❌ သင်သည် ဤ Command ကို အသုံးပြုခွင့်မရှိပါ။")
-
-    # Command ရဲ့ နောက်မှာ user_id ပါမပါ စစ်မယ်
-    args = message.text.split()
-    if len(args) < 2:
-        return await message.answer("⚠️ အသုံးပြုပုံ မှားယွင်းနေပါသည်။\nဥပမာ- `/givepro 12345678`", parse_mode="Markdown")
-
-    target_user_id = args[1]
-    
-    # Database မှာ Plan ကို Pro ပြောင်းမယ်
-    success = await set_user_plan(int(target_user_id), "pro")
-    
-    if success:
-        await message.answer(f"✅ User `{target_user_id}` ကို Pro Plan ပေးပြီးပါပြီ။", parse_mode="Markdown")
-        # User ကိုလည်း အကြောင်းကြားပေးမယ်
-        try:
-
-    @dp.message(Command("admin"))
+@dp.message(Command("admin"))
 async def cmd_admin(message: types.Message):
-    """Admin နှင့် ဆက်သွယ်ရန် Command"""
     await message.answer("👨‍💻 Admin နှင့် ဆက်သွယ်ရန် လိုအပ်ပါက အောက်ပါ လင့်ခ်မှတစ်ဆင့် ဆက်သွယ်နိုင်ပါသည်:\n\n👉 @slipme_mm")
 
 @dp.message(Command("status"))
 async def cmd_status(message: types.Message):
-    """User ၏ အသုံးပြုမှု အခြေအနေကို စစ်ဆေးရန်"""
     user_id = message.from_user.id
-    # check_usage_allowed function ကို သုံးပြီး data ယူမယ်
     is_allowed, reason, char_limit = await check_usage_allowed(user_id)
     
-    # Database ကနေ user data ကို ပြန်ဆွဲထုတ်ပြီး ပြမယ်
     from db_manager import SUPABASE_URL, HEADERS
     import aiohttp
+    from ai_service import get_session
     
     url = f"{SUPABASE_URL}/rest/v1/users?telegram_id=eq.{user_id}"
-    from ai_service import get_session
     session = await get_session()
     
     async with session.get(url, headers=HEADERS) as response:
@@ -106,7 +89,6 @@ async def cmd_status(message: types.Message):
                 user = data[0]
                 plan = user.get('plan_type', 'free')
                 count = user.get('message_count', 0)
-                
                 status_text = (
                     f"📊 **သင်၏ အသုံးပြုမှု အခြေအနေ**\n\n"
                     f"👤 User ID: `{user_id}`\n"
@@ -119,8 +101,63 @@ async def cmd_status(message: types.Message):
                 await message.answer("⚠️ အချက်အလက် ရှာမတွေ့ပါ။")
         else:
             await message.answer("❌ Database ချိတ်ဆက်မှု အမှားရှိနေပါသည်။")
-            await bot.send_message(target_user_id, "🎉 ဂုဏ်ယူပါတယ်! သင့်ကို Pro Plan အဆင့်မြှင့်ပေးလိုက်ပါပြီ။ အခုပဲ အကန့်အသတ်မရှိ အသုံးပြုနိုင်ပါပြီ။")
-        except Exception:
-            pass # User က Bot ကို block ထားရင် error တက်မှာမို့လို့ ignore လုပ်ထားတာ
-    else:
-        await message.answer("❌ အမှားတစ်ခု ဖြစ်ပွားခဲ့ပါသည်။ User ID မှန်မမှန် ပြန်စစ်ပါ။")
+
+@dp.message(Command("givepro"))
+async def cmd_give_pro(message: types.Message):
+    if str(message.from_user.id) != ADMIN_ID:
+        return await message.answer("❌ သင်သည် ဤ Command ကို အသုံးပြုခွင့်မရှိပါ။")
+
+    args = message.text.split()
+    if len(args) < 2:
+        return await message.answer("⚠️ အသုံးပြုပုံ မှားယွင်းနေပါသည်။\nဥပမာ- `/givepro 12345678`", parse_mode="Markdown")
+
+    target_user_id = args[1]
+    try:
+        success = await set_user_plan(int(target_user_id), "pro")
+        if success:
+            await message.answer(f"✅ User `{target_user_id}` ကို Pro Plan ပေးပြီးပါပြီ။", parse_mode="Markdown")
+            try:
+                await bot.send_message(target_user_id, "🎉 ဂုဏ်ယူပါတယ်! သင့်ကို Pro Plan အဆင့်မြှင့်ပေးလိုက်ပါပြီ။")
+            except:
+                pass
+        else:
+            await message.answer("❌ အမှားတစ်ခု ဖြစ်ပွားခဲ့ပါသည်။")
+    except ValueError:
+        await message.answer("❌ User ID သည် နံပါတ်ဖြစ်ရပါမည်။")
+
+@dp.message(F.text)
+async def handle_user_message(message: types.Message):
+    user_id = message.from_user.id
+    user_text = message.text
+    
+    is_allowed, reason, char_limit = await check_usage_allowed(user_id)
+    if not is_allowed:
+        return await message.answer("⚠️ သင်၏ Limit ပြည့်သွားပါပြီ။ Pro Plan သို့ ပြောင်းလဲပါ။", reply_markup=get_upgrade_keyboard())
+
+    processing_msg = await message.answer("⏳ စဉ်းစားနေပါတယ်... ခဏလေးစောင့်ပေးပါ။")
+
+    try:
+        chat_history = await get_chat_history(user_id, limit=20)
+        ai_response = await generate_response(user_text, history=chat_history)
+        
+        if not ai_response:
+            return await processing_msg.edit_text("❌ AI စနစ် ချို့ယွင်းနေပါသည်။")
+            
+        if len(ai_response) > char_limit:
+            ai_response = ai_response[:char_limit] + f"\n\n[⚠️ Plan ကန့်သတ်ချက် ({char_limit}) ပြည့်သွားပါသည်။]"
+            
+        await update_usage(user_id, len(ai_response))
+        await save_chat(user_id, "user", user_text)
+        await save_chat(user_id, "assistant", ai_response)
+        
+        await processing_msg.delete() 
+        
+        if len(ai_response) > 4096:
+            for x in range(0, len(ai_response), 4096):
+                await message.answer(ai_response[x:x+4096])
+        else:
+            await message.answer(ai_response)
+            
+    except Exception as e:
+        logger.error(f"[Bot Logic Error] {e}")
+        await processing_msg.edit_text("❌ အမှားအယွင်းတစ်ခု ဖြစ်ပွားခဲ့ပါသည်။")
