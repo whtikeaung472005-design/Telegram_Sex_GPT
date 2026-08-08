@@ -134,3 +134,16 @@ async def clear_history(telegram_id: int) -> bool:
     except Exception as e:
         logger.error(f"[DB] Error in clear_history: {e}")
         return False
+
+async def set_user_plan(telegram_id: int, plan: str):
+    """User ၏ Plan ကို ပြောင်းလဲရန် (ဥပမာ - 'free' သို့မဟုတ် 'pro')"""
+    url = f"{SUPABASE_URL}/rest/v1/users?telegram_id=eq.{telegram_id}"
+    session = await get_session()
+    try:
+        # plan_type ကို ပြောင်းပြီး message_count ကိုလည်း ၀ ပြန်လုပ်ပေးလိုက်မယ် (Pro ရတာနဲ့ အသစ်စနိုင်အောင်)
+        payload = {"plan_type": plan, "message_count": 0}
+        await session.patch(url, headers=HEADERS, json=payload)
+        return True
+    except Exception as e:
+        logger.error(f"[DB] Error in set_user_plan: {e}")
+        return False
