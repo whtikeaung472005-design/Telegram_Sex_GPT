@@ -121,8 +121,11 @@ async def update_usage(telegram_id: int, char_count: int):
     except Exception as e:
         logger.error(f"[DB] Error in update_usage: {e}")
 
-async def set_user_plan(telegram_id: int, plan: str):
-    """Admin မှ User ၏ Plan ကို ပြောင်းလဲရန် (သက်တမ်း တစ်လ သတ်မှတ်ချက် ပါဝင်သည်)"""
+async def set_user_plan(telegram_id: int, plan: str, days: int = 30):
+    """
+    User ၏ Plan ကို ပြောင်းလဲရန်။
+    days: သက်တမ်း သတ်မှတ်ရမည့် ရက်ပေါင်း (Default သည် ၃၀ ရက်)
+    """
     url = f"{SUPABASE_URL}/rest/v1/users?telegram_id=eq.{telegram_id}"
     session = await get_session()
     try:
@@ -130,8 +133,8 @@ async def set_user_plan(telegram_id: int, plan: str):
         payload = {"plan_type": plan, "message_count": 0}
         
         if plan == "pro":
-            # ရက်ပေါင်း ၃၀ သက်တမ်း သတ်မှတ်ခြင်း (30 days * 24h * 60m * 60s)
-            expiry_timestamp = now + (30 * 24 * 60 * 60)
+            # ရက်ပေါင်း (days) အလိုက် သက်တမ်း သတ်မှတ်ခြင်း
+            expiry_timestamp = now + (days * 24 * 60 * 60)
             payload["pro_expiry_date"] = expiry_timestamp
         else:
             payload["pro_expiry_date"] = 0
